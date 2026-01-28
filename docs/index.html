@@ -10,15 +10,26 @@
   <header class="bar">
     <div>
       <h1>DPS & Effective Health (No Items)</h1>
-      <div class="sub">Static GitHub Pages app reading <code>data/heroes.json</code></div>
+      <div class="sub">
+        Static GitHub Pages app reading <code>data/heroes.json</code>
+      </div>
     </div>
+
     <div class="controls">
       <label>
-        Hero
-        <select id="heroSelect"></select>
+        Search
+        <input id="heroSearch" type="text" placeholder="Type to filter heroes…" />
       </label>
 
       <label>
+        Metric (for ranking)
+        <select id="metric">
+          <option value="dps">DPS</option>
+          <option value="ehp">Physical EHP</option>
+        </select>
+      </label>
+
+      <label class="level">
         Level: <span id="levelLabel">1</span>
         <input id="level" type="range" min="1" max="30" value="1" />
       </label>
@@ -27,20 +38,31 @@
 
   <main class="grid">
     <section class="card">
-      <h2>Summary @ level <span id="levelLabel2">1</span></h2>
+      <div class="hero-list-wrap">
+        <div class="hero-list-head">
+          <div>Select heroes</div>
+          <div class="hero-actions">
+            <button id="selectAll" type="button">All</button>
+            <button id="selectNone" type="button">None</button>
+          </div>
+        </div>
+        <div id="heroList" class="hero-list"></div>
+      </div>
+
+      <h2 class="mt">Summary @ level <span id="levelLabel2">1</span></h2>
       <pre id="summary" class="summary"></pre>
     </section>
 
     <section class="card">
       <h2>DPS vs level</h2>
       <canvas id="dpsChart" width="900" height="360"></canvas>
-      <div class="hint">Physical-only model. No items/talents. Basic attack DPS.</div>
+      <div class="hint">Horizontal grid: every 50 DPS. No items/talents. Basic attacks only.</div>
     </section>
 
     <section class="card">
       <h2>Physical EHP vs level</h2>
       <canvas id="ehpChart" width="900" height="360"></canvas>
-      <div class="hint">EHP vs physical damage using armor reduction.</div>
+      <div class="hint">Horizontal grid: every 250 EHP. Physical-only model using armor reduction.</div>
     </section>
   </main>
 
