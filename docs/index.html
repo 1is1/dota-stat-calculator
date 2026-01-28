@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Dota Hero DPS & EHP (No Items)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="bar">
+    <div>
+      <h1>DPS & Effective Health (No Items)</h1>
+      <div class="sub">Static GitHub Pages app reading <code>data/heroes.json</code></div>
+    </div>
+    <div class="controls">
+      <label>
+        Hero
+        <select id="heroSelect"></select>
+      </label>
+
+      <label>
+        Level: <span id="levelLabel">1</span>
+        <input id="level" type="range" min="1" max="30" value="1" />
+      </label>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>Summary @ level <span id="levelLabel2">1</span></h2>
+      <pre id="summary" class="summary"></pre>
+    </section>
+
+    <section class="card">
+      <h2>DPS vs level</h2>
+      <canvas id="dpsChart" width="900" height="360"></canvas>
+      <div class="hint">Physical-only model. No items/talents. Basic attack DPS.</div>
+    </section>
+
+    <section class="card">
+      <h2>Physical EHP vs level</h2>
+      <canvas id="ehpChart" width="900" height="360"></canvas>
+      <div class="hint">EHP vs physical damage using armor reduction.</div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    Update data by re-running the Python scraper and committing <code>docs/data/heroes.json</code>.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
