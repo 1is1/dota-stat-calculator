@@ -1,4 +1,6 @@
-// ---------- math model (simple, tweakable) ----------
+// --------------------
+// Model math (simple, tweakable)
+// --------------------
 const HP_PER_STR = 22;
 const ARMOR_PER_AGI = 1 / 6; // 0.166666...
 const ARMOR_K = 0.06;        // armor damage reduction constant
@@ -61,134 +63,20 @@ function statsAtLevel(hero, level) {
 
   return {
     level,
+    dps,
+    ehpPhysical,
     str, agi, int: intel,
     hp, armor,
     totalAttackSpeed: tas,
     attacksPerSecond: aps,
     damageAvg: dmgAvg,
-    dps,
-    damageReduction: dr,
-    ehpPhysical
+    damageReduction: dr
   };
 }
 
-// ---------- charting (multi-series canvas) ----------
-function niceCeilToStep(value, step) {
-  if (!isFinite(value) || value <= 0) return step;
-  return Math.ceil(value / step) * step;
-}
-
-function drawMultiLineChart(canvas, series, yLabel, yStep) {
-  // series = [{ name, points: [{x,y},...]}...]
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width;
-  const h = canvas.height;
-  const pad = 40;
-
-  ctx.clearRect(0, 0, w, h);
-
-  const allPoints = series.flatMap(s => s.points);
-  const xs = allPoints.map(p => p.x);
-  const ys = allPoints.map(p => p.y);
-
-  const xMin = Math.min(...xs);
-  const xMax = Math.max(...xs);
-
-  const yMin = 0;
-  const rawYMax = Math.max(...ys);
-  const yMax = niceCeilToStep(rawYMax * 1.05, yStep);
-
-  const xToPx = x => pad + ((x - xMin) / (xMax - xMin || 1)) * (w - pad * 2);
-  const yToPx = y => h - pad - ((y - yMin) / (yMax - yMin || 1)) * (h - pad * 2);
-
-  // Axes
-  ctx.globalAlpha = 0.9;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(pad, pad);
-  ctx.lineTo(pad, h - pad);
-  ctx.lineTo(w - pad, h - pad);
-  ctx.stroke();
-
-  // Horizontal gridlines every yStep
-  ctx.globalAlpha = 0.22;
-  ctx.lineWidth = 1;
-  for (let y = 0; y <= yMax; y += yStep) {
-    const py = yToPx(y);
-    ctx.beginPath();
-    ctx.moveTo(pad, py);
-    ctx.lineTo(w - pad, py);
-    ctx.stroke();
-  }
-
-  // Labels
-  ctx.globalAlpha = 0.85;
-  ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
-  ctx.fillText(yLabel, pad, pad - 10);
-  ctx.fillText("Level", w - pad - 30, h - pad + 25);
-
-  // Y labels on gridlines (optional but useful)
-  ctx.globalAlpha = 0.55;
-  for (let y = 0; y <= yMax; y += yStep) {
-    const py = yToPx(y);
-    ctx.fillText(String(y), 6, py + 4);
-  }
-
-  // X ticks (1, 10, 20, 30)
-  ctx.globalAlpha = 0.7;
-  [1, 10, 20, 30].forEach(t => {
-    if (t < xMin || t > xMax) return;
-    const px = xToPx(t);
-    ctx.beginPath();
-    ctx.moveTo(px, h - pad);
-    ctx.lineTo(px, h - pad + 6);
-    ctx.stroke();
-    ctx.fillText(String(t), px - 4, h - pad + 20);
-  });
-
-  // Lines: differentiate using dash patterns (works without relying on colors)
-  ctx.globalAlpha = 1;
-  ctx.lineWidth = 2;
-
-  series.forEach((s, idx) => {
-    ctx.setLineDash(idx % 3 === 0 ? [] : idx % 3 === 1 ? [6, 4] : [2, 4]);
-
-    ctx.beginPath();
-    s.points.forEach((p, i) => {
-      const px = xToPx(p.x);
-      const py = yToPx(p.y);
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    });
-    ctx.stroke();
-  });
-
-  ctx.setLineDash([]);
-
-  // Legend (cap to avoid a massive block)
-  ctx.globalAlpha = 0.9;
-  const legendX = pad;
-  let legendY = h - pad + 38;
-  const legendMax = 10;
-  series.slice(0, legendMax).forEach((s, idx) => {
-    ctx.setLineDash(idx % 3 === 0 ? [] : idx % 3 === 1 ? [6, 4] : [2, 4]);
-    ctx.beginPath();
-    ctx.moveTo(legendX, legendY);
-    ctx.lineTo(legendX + 26, legendY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.fillText(s.name, legendX + 32, legendY + 4);
-    legendY += 16;
-  });
-
-  if (series.length > legendMax) {
-    ctx.globalAlpha = 0.65;
-    ctx.fillText(`+ ${series.length - legendMax} more`, legendX + 32, legendY + 4);
-  }
-}
-
-// ---------- app ----------
+// --------------------
+// UI state + helpers
+// --------------------
 let HEROES = [];
 const DEFAULT_SELECTED = new Set();
 
@@ -241,6 +129,157 @@ function renderHeroList(filterText = "") {
     });
 }
 
+// --------------------
+// Chart.js setup
+// --------------------
+let dpsChart = null;
+let ehpChart = null;
+
+function buildDatasets(selectedHeroes, metricKey) {
+  // metricKey: "dps" or "ehpPhysical"
+  // Return Chart.js datasets with labels = hero name (shows in tooltip)
+  return selectedHeroes.map((h, idx) => {
+    const points = [];
+    for (let L = 1; L <= 30; L++) {
+      const s = statsAtLevel(h, L);
+      points.push({ x: L, y: s[metricKey] });
+    }
+
+    // Differentiation without hardcoding colors:
+    // - give each dataset a dash style based on index
+    const dash = idx % 3 === 0 ? [] : idx % 3 === 1 ? [6, 4] : [2, 4];
+
+    return {
+      label: h.name,
+      data: points,
+      parsing: false,
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.15,
+      borderDash: dash
+      // no explicit color -> Chart.js uses defaults (may repeat; dash helps)
+    };
+  });
+}
+
+function ensureCharts() {
+  if (dpsChart && ehpChart) return;
+
+  const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: "nearest",
+      intersect: false
+    },
+    plugins: {
+      legend: {
+        display: true,
+        position: "bottom"
+      },
+      tooltip: {
+        enabled: true,
+        callbacks: {
+          title: (items) => {
+            const item = items?.[0];
+            if (!item) return "";
+            const level = item.raw?.x ?? item.label;
+            return `Level ${level}`;
+          },
+          label: (item) => {
+            const hero = item.dataset?.label ?? "Hero";
+            const value = item.raw?.y ?? item.parsed?.y ?? 0;
+            return `${hero}: ${Number(value).toFixed(2)}`;
+          }
+        }
+      }
+    }
+  };
+
+  dpsChart = new Chart(dpsCanvas.getContext("2d"), {
+    type: "line",
+    data: { datasets: [] },
+    options: {
+      ...commonOptions,
+      scales: {
+        x: {
+          type: "linear",
+          min: 1,
+          max: 30,
+          ticks: { stepSize: 1 }
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 50 },  // <-- every 50 DPS
+          grid: { drawTicks: true }
+        }
+      }
+    }
+  });
+
+  ehpChart = new Chart(ehpCanvas.getContext("2d"), {
+    type: "line",
+    data: { datasets: [] },
+    options: {
+      ...commonOptions,
+      scales: {
+        x: {
+          type: "linear",
+          min: 1,
+          max: 30,
+          ticks: { stepSize: 1 }
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 250 }, // <-- every 250 EHP
+          grid: { drawTicks: true }
+        }
+      }
+    }
+  });
+}
+
+function updateCharts(selectedHeroes) {
+  ensureCharts();
+
+  dpsChart.data.datasets = buildDatasets(selectedHeroes, "dps");
+  ehpChart.data.datasets = buildDatasets(selectedHeroes, "ehpPhysical");
+
+  dpsChart.update();
+  ehpChart.update();
+}
+
+// --------------------
+// Summary + main update
+// --------------------
+function updateSummary(selectedHeroes, level, rankBy) {
+  const rows = selectedHeroes.map(h => {
+    const s = statsAtLevel(h, level);
+    return {
+      name: h.name,
+      dps: s.dps,
+      ehp: s.ehpPhysical
+    };
+  });
+
+  // Sort by selected metric, but show both columns
+  rows.sort((a, b) => (rankBy === "dps" ? b.dps - a.dps : b.ehp - a.ehp));
+
+  // Simple aligned-ish formatting
+  const lines = rows.slice(0, 60).map(r => {
+    const dps = r.dps.toFixed(2).padStart(9, " ");
+    const ehp = r.ehp.toFixed(1).padStart(9, " ");
+    return `${r.name}\n  DPS: ${dps}   EHP: ${ehp}`;
+  });
+
+  summary.textContent =
+`Selected: ${selectedHeroes.length}
+Level: ${level}
+Ranked by: ${rankBy === "dps" ? "DPS" : "Physical EHP"}
+
+` + lines.join("\n\n") + (rows.length > 60 ? `\n\n...and ${rows.length - 60} more` : "");
+}
+
 function updateUI() {
   const level = Number(levelSlider.value);
   levelLabel.textContent = String(level);
@@ -249,50 +288,21 @@ function updateUI() {
   const selected = getSelectedHeroes();
   if (selected.length === 0) {
     summary.textContent = "Select at least one hero to compare.";
-    const blank = [{ name: "None", points: [{x:1,y:0},{x:30,y:0}] }];
-    drawMultiLineChart(dpsCanvas, blank, "DPS", 50);
-    drawMultiLineChart(ehpCanvas, blank, "Physical EHP", 250);
+    updateCharts([{ id: "none", name: "None", primaryAttribute: "Strength", base: {
+      str: 0, strGain: 0, agi: 0, agiGain: 0, int: 0, intGain: 0,
+      hp: 0, armor: 0, dmgMin: 0, dmgMax: 0, attackSpeed: 100, bat: 1.7
+    }}]);
     return;
   }
 
-  // Summary: rank selected heroes by chosen metric at chosen level
-  const metric = metricEl.value; // "dps" or "ehp"
-  const rows = selected.map(h => {
-    const s = statsAtLevel(h, level);
-    const value = metric === "dps" ? s.dps : s.ehpPhysical;
-    return { name: h.name, value };
-  }).sort((a, b) => b.value - a.value);
-
-  summary.textContent =
-`Selected: ${selected.length}
-Ranking metric @ level ${level}: ${metric === "dps" ? "DPS" : "Physical EHP"}
-
-` + rows.slice(0, 40).map(r => `${r.name}: ${r.value.toFixed(2)}`).join("\n")
-    + (rows.length > 40 ? `\n...and ${rows.length - 40} more` : "");
-
-  // Curves
-  const dpsSeries = selected.map(h => ({
-    name: h.name,
-    points: Array.from({ length: 30 }, (_, i) => {
-      const L = i + 1;
-      const st = statsAtLevel(h, L);
-      return { x: L, y: st.dps };
-    })
-  }));
-
-  const ehpSeries = selected.map(h => ({
-    name: h.name,
-    points: Array.from({ length: 30 }, (_, i) => {
-      const L = i + 1;
-      const st = statsAtLevel(h, L);
-      return { x: L, y: st.ehpPhysical };
-    })
-  }));
-
-  drawMultiLineChart(dpsCanvas, dpsSeries, "DPS", 50);
-  drawMultiLineChart(ehpCanvas, ehpSeries, "Physical EHP", 250);
+  const rankBy = metricEl.value; // "dps" or "ehp"
+  updateSummary(selected, level, rankBy);
+  updateCharts(selected);
 }
 
+// --------------------
+// Boot
+// --------------------
 async function init() {
   const res = await fetch("data/heroes.json", { cache: "no-cache" });
   const data = await res.json();
@@ -303,7 +313,7 @@ async function init() {
     return;
   }
 
-  // Default selection: first 5 heroes (change as you like)
+  // Default: first 5 heroes selected (change as you like)
   HEROES.slice(0, 5).forEach(h => DEFAULT_SELECTED.add(h.id));
 
   renderHeroList("");

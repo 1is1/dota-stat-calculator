@@ -73,12 +73,12 @@ input[type="range"] {
 .hint { color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }
 
 .summary {
-  margin: 0;
+  margin: 0.5rem 0 0 0;
   white-space: pre-wrap;
   color: var(--text);
   font-size: 0.9rem;
   line-height: 1.35;
-  min-height: 120px;
+  min-height: 180px;
 }
 
 .foot {
@@ -140,12 +140,19 @@ code { color: #cfe0ff; }
   border-radius: 10px;
   user-select: none;
 }
-
 .hero-item:hover {
   background: rgba(255,255,255,0.04);
 }
-
 .hero-item input[type="checkbox"] {
   width: 16px;
   height: 16px;
+}
+
+/* charts */
+.chart-wrap {
+  height: 360px; /* fixed height so Chart.js is stable */
+}
+canvas {
+  width: 100% !important;
+  height: 100% !important;
 }
